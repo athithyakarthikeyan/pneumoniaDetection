@@ -1,6 +1,6 @@
-# 🏥 Chest X-ray Pneumonia Detection using Deep Learning  
+# Chest X-ray Pneumonia Detection using Deep Learning  
 
-## 📖 Project Overview  
+## Project Overview  
 This project classifies **chest X-ray images** as either **Pneumonia** or **Normal** using **a deep learning model (CNN) trained with PyTorch**.  
 
 ## Dataset  
