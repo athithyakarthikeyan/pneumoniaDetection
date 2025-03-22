@@ -11,6 +11,7 @@ This project implements pneumonia detection using a fine-tuned ResNet-50 model t
 
 ## Dataset
 Kaggle Link : https://www.kaggle.com/datasets/paultimothymooney/chest-xray-pneumonia
+
 The dataset consists of labeled chest X-ray images categorized as:
 - **Normal** – Healthy lungs.
 - **Pneumonia** – Lungs with signs of infection.
@@ -20,6 +21,7 @@ pip install torch torchvision numpy opencv-python matplotlib pillow tk
 
 ## Clone the Repository
 git clone https://github.com/your-username/pneumonia-detection.git
+
 cd pneumonia-detection
 
 ## Run the Application
