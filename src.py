@@ -28,12 +28,12 @@ transform = transforms.Compose([
 train_data = datasets.ImageFolder(train_dir, transform=transform)
 test_data = datasets.ImageFolder(test_dir, transform=transform)
 
-train_loader = data.DataLoader(train_data, batch_size=8, shuffle=True)
-test_loader = data.DataLoader(test_data, batch_size=8, shuffle=False)
+train_loader = data.DataLoader(train_data, batch_size=16, shuffle=True)
+test_loader = data.DataLoader(test_data, batch_size=16, shuffle=False)
 
 class_names = ["Normal", "Pneumonia"]
 
-# Load pre-trained ResNet50 and modify final layer
+# Load pre-trained ResNet50 and fine-tune
 model = models.resnet50(pretrained=True)
 num_ftrs = model.fc.in_features
 model.fc = nn.Linear(num_ftrs, 2)
@@ -41,10 +41,10 @@ model = model.to(device)
 
 # Loss and optimizer
 criterion = nn.CrossEntropyLoss()
-optimizer = optim.Adam(model.parameters(), lr=0.0001)
+optimizer = optim.Adam(model.parameters(), lr=1e-5)
 
 # Train model
-epochs = 5
+epochs = 10
 for epoch in range(epochs):
     model.train()
     running_loss = 0.0
@@ -66,14 +66,10 @@ for epoch in range(epochs):
 # Save trained model
 torch.save(model.state_dict(), "pneumonia_model.pth")
 
-# Sample images
-sample_normal_img = os.path.join(test_dir, "NORMAL", os.listdir(os.path.join(test_dir, "NORMAL"))[0])
-sample_pneumonia_img = os.path.join(test_dir, "PNEUMONIA", os.listdir(os.path.join(test_dir, "PNEUMONIA"))[0])
-
 # Grad-CAM Function
 def apply_grad_cam(image_path, predicted_class):
     if predicted_class == 0:
-        return None  # No need for Grad-CAM if prediction is normal
+        return None
 
     model.eval()
 
@@ -90,14 +86,16 @@ def apply_grad_cam(image_path, predicted_class):
     def backward_hook(module, grad_in, grad_out):
         gradients.append(grad_out[0])
 
-    # Target last convolutional layer
-    target_layer = model.layer4[-1].conv3
+    # Target the last convolutional layer
+    target_layer = model.layer4[2].conv3
+
+    # Register hooks
     forward_hook_handle = target_layer.register_forward_hook(forward_hook)
-    backward_hook_handle = target_layer.register_full_backward_hook(backward_hook)  # Fixed warning
+    backward_hook_handle = target_layer.register_full_backward_hook(backward_hook)
 
     # Forward pass
     output = model(img_tensor)
-    class_idx = torch.argmax(output, dim=1).item()  # Ensure correct class is used
+    class_idx = torch.argmax(output, dim=1).item()
 
     model.zero_grad()
     output[:, class_idx].backward()
@@ -111,22 +109,25 @@ def apply_grad_cam(image_path, predicted_class):
     gradients = gradients[0].detach()
 
     # Compute Grad-CAM heatmap
-    pooled_grads = torch.mean(gradients, dim=[0, 2, 3])
-    for i in range(activations.shape[1]):
-        activations[:, i, :, :] *= pooled_grads[i]
-
+    pooled_grads = torch.mean(gradients, dim=(2, 3), keepdim=True)
+    activations *= pooled_grads
     heatmap = torch.mean(activations, dim=1).squeeze().cpu().numpy()
-    heatmap = np.maximum(heatmap, 0)  # ReLU to remove negatives
-    heatmap /= np.max(heatmap) if np.max(heatmap) > 0 else 1  # Normalize
+
+    # Normalize the heatmap
+    heatmap = np.maximum(heatmap, 0)
+    heatmap = (heatmap - np.min(heatmap)) / (np.max(heatmap) - np.min(heatmap) + 1e-10)
+    heatmap = np.uint8(255 * heatmap)
+
+    # Invert heatmap if colors seem flipped
+    heatmap = 255 - heatmap
 
     # Resize heatmap and apply color mapping
     heatmap = cv2.resize(heatmap, (224, 224))
-    heatmap = np.uint8(255 * heatmap)
-    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_JET)
+    heatmap = cv2.applyColorMap(heatmap, cv2.COLORMAP_TURBO)  # Clearer colormap
 
     # Overlay on original image
-    original_img = np.array(image.resize((224, 224)))  # Convert PIL to NumPy
-    superimposed_img = cv2.addWeighted(original_img, 0.6, heatmap, 0.4, 0)
+    original_img = np.array(image.resize((224, 224)))
+    superimposed_img = cv2.addWeighted(original_img, 0.7, heatmap, 0.3, 0)
 
     return superimposed_img
 
@@ -144,31 +145,25 @@ def predict_image(image_path):
     prediction = class_names[predicted_class]
     heatmap_img = apply_grad_cam(image_path, predicted_class)
 
-    if predicted_class == 0:
-        display_images(image_path, sample_normal_img, sample_pneumonia_img, None, prediction)
-    else:
-        heatmap_path = "gradcam_result.jpg"
-        cv2.imwrite(heatmap_path, cv2.cvtColor(heatmap_img, cv2.COLOR_RGB2BGR))
-        display_images(image_path, sample_normal_img, sample_pneumonia_img, heatmap_path, prediction)
+    display_images(image_path, prediction, heatmap_img)
 
 # Display images in Matplotlib
-def display_images(user_img, normal_img, pneumonia_img, heatmap_img, prediction):
-    images = [user_img, normal_img, pneumonia_img]
-    titles = ["Your X-ray", "Normal Lung", "Pneumonia Lung"]
-    
-    images_to_show = []
-    for img_path in images:
-        img = cv2.imread(img_path)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        images_to_show.append(img)
+def display_images(user_img_path, prediction, heatmap_img):
+    user_img = cv2.imread(user_img_path)
+    user_img = cv2.cvtColor(user_img, cv2.COLOR_BGR2RGB)
 
-    if heatmap_img:
-        heatmap = cv2.imread(heatmap_img)
-        heatmap = cv2.cvtColor(heatmap, cv2.COLOR_BGR2RGB)
-        images_to_show.append(heatmap)
+    images_to_show = [user_img]
+    titles = ["Your X-ray"]
+
+    if heatmap_img is not None:
+        images_to_show.append(heatmap_img)
         titles.append("Affected Areas")
 
-    fig, axes = plt.subplots(1, len(images_to_show), figsize=(20, 5))
+    fig, axes = plt.subplots(1, len(images_to_show), figsize=(10 * len(images_to_show), 5))
+
+    if len(images_to_show) == 1:
+        axes = [axes]
+
     for ax, img, title in zip(axes, images_to_show, titles):
         ax.imshow(img)
         ax.set_title(title, fontsize=12)
