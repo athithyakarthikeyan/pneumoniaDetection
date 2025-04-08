@@ -20,10 +20,13 @@ The dataset consists of labeled chest X-ray images categorized as:
 pip install torch torchvision numpy opencv-python matplotlib pillow tk
 
 ## Clone the Repository
-git clone https://github.com/your-username/pneumonia-detection.git
+git clone https://github.com/athithyakarthikeyan/pneumoniaDetection.git
 
-cd pneumonia-detection
+cd pneumoniaDetection
+
+## Install the requirements
+
 
 ## Run the Application
-python src.py
+python pneumonia.py
 
