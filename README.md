@@ -16,16 +16,13 @@ The dataset consists of labeled chest X-ray images categorized as:
 - **Normal** – Healthy lungs.
 - **Pneumonia** – Lungs with signs of infection.
 
-## Installation
-pip install torch torchvision numpy opencv-python matplotlib pillow tk
-
 ## Clone the Repository
 git clone https://github.com/athithyakarthikeyan/pneumoniaDetection.git
 
 cd pneumoniaDetection
 
 ## Install the requirements
-
+pip install -r requirements.txt
 
 ## Run the Application
 python pneumonia.py
